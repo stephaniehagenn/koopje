@@ -99,7 +99,7 @@ CONFIG = {
     'delay_between_requests': 3,  # seconds
     'max_retries': 3,
     'timeout': 30,
-    'output_file': '../api/data/products.json',
+    'output_file': '/api/data/products.json',
 }
 
 
