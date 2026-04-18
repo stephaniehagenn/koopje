@@ -15,6 +15,10 @@ on:
       - 'scraper_main.py'
       - '.github/workflows/scrape.yml'
 
+# NIEUW: Geef workflow permissie om te committen en pushen
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -45,7 +49,8 @@ jobs:
     - name: 📊 Check if data changed
       id: check_changes
       run: |
-        if git diff --quiet api/data/products.json; then
+        git add api/data/products.json
+        if git diff --staged --quiet; then
           echo "changed=false" >> $GITHUB_OUTPUT
           echo "No price changes detected"
         else
@@ -58,7 +63,6 @@ jobs:
       run: |
         git config --local user.name "Price Scraper Bot"
         git config --local user.email "action@github.com"
-        git add api/data/products.json
         git commit -m "🤖 Auto-update prices - $(date +'%Y-%m-%d %H:%M:%S')"
         git push
     
@@ -78,7 +82,7 @@ jobs:
         echo "✅ Scraping completed successfully!"
         echo "Timestamp: $(date)"
         if [ "${{ steps.check_changes.outputs.changed }}" == "true" ]; then
-          echo "📊 Price data updated"
+          echo "📊 Price data updated and committed!"
         else
           echo "📊 No price changes"
         fi
