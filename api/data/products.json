@@ -1,5 +1,6 @@
 {
-  "lastUpdated": "2026-04-18T12:00:00.000Z",
+  from datetime import datetime
+lastUpdated = datetime.now().isoformat() + "Z"
   "products": {
     "pampers-newborn-74": {
       "name": "Pampers Premium Protection Newborn",
