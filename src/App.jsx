@@ -1880,32 +1880,7 @@ useEffect(() => {
     clearInterval(interval);
   };
 }, []); // Let op: wishlistIds NIET in dependency array
-// ✨ NIEUW: Load wishlist from localStorage on mount
-  useEffect(() => {
-    const savedWishlist = localStorage.getItem('babytracker_wishlist');
-    if (savedWishlist) {
-      try {
-        const parsed = JSON.parse(savedWishlist);
-        console.log('📥 Loaded wishlist from storage:', parsed);
-        setWishlistIds(parsed);
-        if (parsed.length > 0 && !selectedProductId) {
-          setSelectedProductId(parsed[0]);
-        }
-      } catch (err) {
-        console.error('Failed to parse wishlist from storage:', err);
-      }
-    }
-  }, []); // Run only once on mount
-  
-  // ✨ NIEUW: Save wishlist to localStorage whenever it changes
-  useEffect(() => {
-    if (wishlistIds.length > 0) {
-      localStorage.setItem('babytracker_wishlist', JSON.stringify(wishlistIds));
-      console.log('💾 Saved wishlist to storage:', wishlistIds);
-    }
-  }, [wishlistIds]); // Run whenever wishlistIds changes
 
-  const selectedProduct = selectedProductId ? { id: selectedProductId, ...products[selectedProductId] } : null;
   const selectedProduct = selectedProductId ? { id: selectedProductId, ...products[selectedProductId] } : null;
 
   const navigate = (s) => {
