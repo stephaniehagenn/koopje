@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import { SearchAndFilter } from './SearchAndFilter';
 
 // ═══════════════════════════════════════════════════════════
 // API CONFIGURATION
@@ -286,6 +287,14 @@ function WishlistScreen({
   toggleProductAlert,
   lastUpdated,
 }) {
+  // ✨ NIEUW: State voor gefilterde producten
+  const [filteredIds, setFilteredIds] = useState(wishlistIds);
+
+  // Update filtered IDs when wishlist changes
+  useEffect(() => {
+    setFilteredIds(wishlistIds);
+  }, [wishlistIds]);
+
   const [searchQuery, setSearchQuery] = useState("");
 
   const productList = Object.entries(products).map(([id, product]) => ({
@@ -299,7 +308,9 @@ function WishlistScreen({
     );
   }, [searchQuery, productList]);
 
-  const wishlistProducts = productList.filter((p) => wishlistIds.includes(p.id));
+  const wishlistProducts = useMemo(() => {
+    return productList.filter((p) => wishlistIds.includes(p.id));
+  }, [productList, wishlistIds]);
 
   const handleViewRetailers = (e, productId) => {
     e.stopPropagation();
@@ -491,8 +502,15 @@ function WishlistScreen({
         </span>
       </div>
 
+      {/* ✨ NIEUW: Search and Filter */}
+      <SearchAndFilter 
+        products={products}
+        wishlistIds={wishlistIds}
+        onFilteredChange={setFilteredIds}
+      />
+
       <div style={{ padding: "0 20px" }}>
-        {wishlistProducts.length === 0 ? (
+        {filteredIds.length === 0 ? (
           <div
             style={{
               background: "#f8f5f0",
@@ -526,10 +544,11 @@ function WishlistScreen({
             </div>
           </div>
         ) : (
-          wishlistProducts.map((product) => {
-            const cheapest = getCheapestRetailer(products, product.id);
-            const retailers = product.retailers || [];
-            const hasAlert = !!productAlerts[product.id];
+          filteredIds.map((id) => {
+            const p = { id, ...products[id] };
+            const cheapest = getCheapestRetailer(products, id);
+            const retailers = p.retailers || [];
+            const hasAlert = !!productAlerts[id];
 
             // Calculate discount percentage
             const normalPrice = retailers.length > 0 
@@ -541,7 +560,7 @@ function WishlistScreen({
 
             return (
               <div
-                key={product.id}
+                key={p.id}
                 style={{
                   background: "white",
                   borderRadius: 18,
@@ -564,7 +583,7 @@ function WishlistScreen({
                       flexShrink: 0,
                     }}
                   >
-                    {product.icon}
+                    {p.icon}
                   </div>
 
                   <div style={{ flex: 1 }}>
@@ -577,7 +596,7 @@ function WishlistScreen({
                         lineHeight: 1.35,
                       }}
                     >
-                      {product.name}
+                      {p.name}
                     </div>
                     <div
                       style={{
@@ -587,14 +606,14 @@ function WishlistScreen({
                         marginTop: 3,
                       }}
                     >
-                      {product.category} · {product.size}
+                      {p.category} · {p.size}
                     </div>
                   </div>
 
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleWishlist(product.id);
+                      toggleWishlist(p.id);
                     }}
                     style={{
                       background: "none",
@@ -700,7 +719,7 @@ function WishlistScreen({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleProductAlert(product.id);
+                          toggleProductAlert(p.id);
                         }}
                         style={{
                           flex: 1,
@@ -723,7 +742,7 @@ function WishlistScreen({
                       </button>
 
                       <button
-                        onClick={(e) => handleViewRetailers(e, product.id)}
+                        onClick={(e) => handleViewRetailers(e, p.id)}
                         style={{
                           flex: 1,
                           background: "white",
