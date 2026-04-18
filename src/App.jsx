@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 ──────────────────────────────────────────────────────── */
 
 // Change this to your API URL after deployment
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 /* ────────────────────────────────────────────────────────
    API HOOKS
