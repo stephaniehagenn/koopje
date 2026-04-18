@@ -1831,42 +1831,55 @@ export default function App() {
   const scrollRef = useRef(null);
 
   // Fetch products from API
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        console.log('📡 Fetching products from:', `${API_URL}/products`);
-        const response = await fetch(`${API_URL}/products`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('✅ Products loaded:', data);
-        
-        setProducts(data.products || {});
-        setLastUpdated(data.lastUpdated);
-        
-        // Initialize wishlist with all products
-        const productIds = Object.keys(data.products || {});
-        if (productIds.length > 0) {
-          setWishlistIds(productIds);
-          setSelectedProductId(productIds[0]);
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('❌ Error fetching products:', err);
-        setError(err.message);
-        setLoading(false);
+useEffect(() => {
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('📡 Fetching products from:', `${API_URL}/products`);
+      const response = await fetch(`${API_URL}/products`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
-    
+      
+      const data = await response.json();
+      console.log('✅ Products loaded:', data);
+      
+      setProducts(data.products || {});
+      setLastUpdated(data.lastUpdated);
+      
+      // Initialize wishlist with all products
+      const productIds = Object.keys(data.products || {});
+      if (productIds.length > 0 && wishlistIds.length === 0) {
+        setWishlistIds(productIds);
+        setSelectedProductId(productIds[0]);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('❌ Error fetching products:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+  
+  // Initial fetch
+  fetchProducts();
+  
+  // ✨ NIEUW: Auto-refresh elke 5 minuten
+  const interval = setInterval(() => {
+    console.log('🔄 Auto-refreshing prices...');
     fetchProducts();
-  }, []);
+  }, 5 * 60 * 1000); // 5 minuten in milliseconden
+  
+  // Cleanup: stop interval wanneer component unmounts
+  return () => {
+    console.log('🛑 Stopping auto-refresh');
+    clearInterval(interval);
+  };
+}, []); // Let op: wishlistIds NIET in dependency array
 
   const selectedProduct = selectedProductId ? { id: selectedProductId, ...products[selectedProductId] } : null;
 
