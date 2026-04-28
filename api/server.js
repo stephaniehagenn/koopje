@@ -92,73 +92,74 @@ app.get('/health', async (req, res) => {
 // Get all products with latest prices
 // ────────────────────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
-  console.log('📦 Products requested');
-
   try {
-    const result = await pool.query(`
-      SELECT 
-        p.id,
-        p.name,
-        p.brand,
-        p.category,
-        p.size,
-        p.image_url,
-        p.emoji,
-        p.next_discount,
-        (
-          SELECT json_agg(
-            json_build_object(
-              'id', r.id,
-              'name', r.name,
-              'price', ph.price,
-              'oldPrice', ph.old_price,
-              'discount', ph.is_discount,
-              'logo', r.logo,
-              'url', r.url,
-              'lastChecked', ph.timestamp,
-              'stock', ph.in_stock,
-              'shippingCost', ph.shipping_cost
-            )
-          )
-          FROM (
-            SELECT DISTINCT ON (retailer_id) *
-            FROM price_history
-            WHERE product_id = p.id
-            ORDER BY retailer_id, timestamp DESC
-          ) ph
-          JOIN retailers r ON ph.retailer_id = r.id
-        ) as retailers
-      FROM products p
-      WHERE p.is_active = true
-    `);
+    console.log('📦 Products requested');
 
+    const query = `
+      SELECT 
+        p.id, p.name, p.brand, p.category, p.size, p.maat, p.emoji,
+        r.id as retailer_id, r.name as retailer_name, r.logo as retailer_logo,
+        ph.price, ph.old_price, ph.is_discount, ph.in_stock, 
+        ph.shipping_cost, ph.timestamp,
+        ph.total_price, ph.price_per_unit, ph.promo_quantity,
+        ph.promo_type, ph.original_price, ph.discount_amount
+      FROM products p
+      LEFT JOIN LATERAL (
+        SELECT DISTINCT ON (retailer_id) *
+        FROM price_history
+        WHERE product_id = p.id
+        ORDER BY retailer_id, timestamp DESC
+      ) ph ON true
+      LEFT JOIN retailers r ON ph.retailer_id = r.id
+      WHERE p.is_active = true
+      ORDER BY p.category, p.name, r.name
+    `;
+
+    const result = await pool.query(query);
+    
+    // Group by product
     const products = {};
-    result.rows.forEach(p => {
-      products[p.id] = {
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-        size: p.size,
-        imageUrl: p.image_url,
-        emoji: p.emoji,
-        retailers: p.retailers || [],
-        nextDiscount: p.next_discount,
-      };
+    result.rows.forEach(row => {
+      if (!products[row.id]) {
+        products[row.id] = {
+          id: row.id,
+          name: row.name,
+          brand: row.brand,
+          category: row.category,
+          size: row.size,
+          maat: row.maat,  // NEW!
+          emoji: row.emoji,
+          retailers: []
+        };
+      }
+      
+      if (row.retailer_id) {
+        products[row.id].retailers.push({
+          name: row.retailer_name,
+          logo: row.retailer_logo,
+          price: parseFloat(row.price),
+          oldPrice: row.old_price ? parseFloat(row.old_price) : null,
+          discount: row.is_discount,
+          inStock: row.in_stock,
+          shippingCost: parseFloat(row.shipping_cost),
+          lastChecked: row.timestamp,
+          // NEW FIELDS:
+          totalPrice: row.total_price ? parseFloat(row.total_price) : null,
+          pricePerUnit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
+          promoQuantity: row.promo_quantity,
+          promoType: row.promo_type,
+          originalPrice: row.original_price ? parseFloat(row.original_price) : null,
+          discountAmount: row.discount_amount ? parseFloat(row.discount_amount) : null
+        });
+      }
     });
 
     console.log(`✅ Returned ${Object.keys(products).length} products`);
+    res.json({ products });
 
-    res.json({
-      products,
-      lastUpdated: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('❌ Error fetching products:', err);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to fetch products',
-      message: err.message 
-    });
+  } catch (error) {
+    console.error('❌ Error fetching products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
   }
 });
 
