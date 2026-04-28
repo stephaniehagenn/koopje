@@ -334,25 +334,35 @@ app.get('/api/products/:productId/history', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
 // Manual scraper trigger (runs in background)
 // ────────────────────────────────────────────────────────────
 app.post('/api/scrape', async (req, res) => {
   console.log('🤖 Manual scrape triggered');
 
   try {
+    // Import ScraperManager
     const ScraperManager = require('./scrapers/scraper');
+    
+    // Create instance
     const manager = new ScraperManager();
 
-    // Run in background - don't await
+    // Start scraping in background (don't await)
     manager.scrapeAllProducts()
-      .then(() => console.log('✅ Background scrape completed'))
-      .catch(err => console.error('❌ Background scrape failed:', err));
+      .then(() => {
+        console.log('✅ Background scrape completed successfully');
+      })
+      .catch(err => {
+        console.error('❌ Background scrape failed:', err);
+      });
 
+    // Immediately respond to user
     res.json({
       success: true,
       message: 'Scraping started in background',
       timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     console.error('❌ Scrape trigger failed:', error);
     res.status(500).json({
@@ -362,7 +372,6 @@ app.post('/api/scrape', async (req, res) => {
     });
   }
 });
-
 // ────────────────────────────────────────────────────────────
 // Track analytics event
 // ────────────────────────────────────────────────────────────
