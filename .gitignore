@@ -1,0 +1,33 @@
+# Environment variables - NOOIT UPLOADEN!
+.env
+.env.local
+.env.development
+.env.production
+*.env
+api/.env
+
+# Dependencies
+node_modules/
+api/node_modules/
+**/node_modules/
+
+# Build
+dist/
+build/
+.next/
+out/
+.vercel/
+
+# Puppeteer
+.local-chromium/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
