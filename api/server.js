@@ -1,111 +1,400 @@
+// ═══════════════════════════════════════════════════════════
+// BABY PRICE TRACKER API SERVER
+// Version: 2.0 - Met scraping functionaliteit
+// ═══════════════════════════════════════════════════════════
+
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ═══════════════════════════════════════════════════════════
+// DATABASE CONNECTION
+// ═══════════════════════════════════════════════════════════
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// Test database connection
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('❌ Database connection failed:', err.message);
+  } else {
+    console.log('✅ Database connected:', res.rows[0].now);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// MIDDLEWARE
+// ═══════════════════════════════════════════════════════════
+
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    service: 'Baby Price Tracker API'
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// ═══════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════
+
+// ────────────────────────────────────────────────────────────
+// Root - Show available endpoints
+// ────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Baby Price Tracker API',
+    version: '2.0',
+    availableEndpoints: [
+      'GET /health - Health check',
+      'GET /api/products - Get all products with prices',
+      'GET /api/products/:productId - Get single product',
+      'GET /api/products/:productId/cheapest - Get cheapest retailer for product',
+      'GET /api/products/:productId/history - Get price history',
+      'POST /api/scrape - Trigger manual scrape (background)',
+      'POST /api/track - Track analytics event'
+    ]
   });
 });
 
-// Get all products with prices
-app.get('/api/products', async (req, res) => {
+// ────────────────────────────────────────────────────────────
+// Health check
+// ────────────────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
   try {
-    const dataPath = path.join(__dirname, 'data', 'products.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    const products = JSON.parse(data);
-    
+    const dbCheck = await pool.query('SELECT NOW()');
     res.json({
-      success: true,
-      ...products
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      uptime: process.uptime()
     });
   } catch (error) {
-    console.error('Error reading products:', error);
     res.status(500).json({
-      success: false,
-      error: 'Failed to fetch products',
-      message: error.message
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
     });
   }
 });
 
-// Get specific product by ID
-app.get('/api/products/:productId', async (req, res) => {
+// ────────────────────────────────────────────────────────────
+// Get all products with latest prices
+// ────────────────────────────────────────────────────────────
+app.get('/api/products', async (req, res) => {
+  console.log('📦 Products requested');
+
   try {
-    const { productId } = req.params;
-    const dataPath = path.join(__dirname, 'data', 'products.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    const allData = JSON.parse(data);
-    
-    const product = allData.products[productId];
-    
-    if (!product) {
+    const result = await pool.query(`
+      SELECT 
+        p.id,
+        p.name,
+        p.brand,
+        p.category,
+        p.size,
+        p.image_url,
+        p.emoji,
+        p.next_discount,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', r.id,
+              'name', r.name,
+              'price', ph.price,
+              'oldPrice', ph.old_price,
+              'discount', ph.is_discount,
+              'logo', r.logo,
+              'url', r.url,
+              'lastChecked', ph.timestamp,
+              'stock', ph.in_stock,
+              'shippingCost', ph.shipping_cost
+            )
+          )
+          FROM (
+            SELECT DISTINCT ON (retailer_id) *
+            FROM price_history
+            WHERE product_id = p.id
+            ORDER BY retailer_id, timestamp DESC
+          ) ph
+          JOIN retailers r ON ph.retailer_id = r.id
+        ) as retailers
+      FROM products p
+      WHERE p.is_active = true
+    `);
+
+    const products = {};
+    result.rows.forEach(p => {
+      products[p.id] = {
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+        size: p.size,
+        imageUrl: p.image_url,
+        emoji: p.emoji,
+        retailers: p.retailers || [],
+        nextDiscount: p.next_discount,
+      };
+    });
+
+    console.log(`✅ Returned ${Object.keys(products).length} products`);
+
+    res.json({
+      products,
+      lastUpdated: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('❌ Error fetching products:', err);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch products',
+      message: err.message 
+    });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// Get single product
+// ────────────────────────────────────────────────────────────
+app.get('/api/products/:productId', async (req, res) => {
+  const { productId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        p.*,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', r.id,
+              'name', r.name,
+              'price', ph.price,
+              'oldPrice', ph.old_price,
+              'discount', ph.is_discount,
+              'logo', r.logo,
+              'url', r.url,
+              'lastChecked', ph.timestamp,
+              'stock', ph.in_stock,
+              'shippingCost', ph.shipping_cost
+            )
+          )
+          FROM (
+            SELECT DISTINCT ON (retailer_id) *
+            FROM price_history
+            WHERE product_id = p.id
+            ORDER BY retailer_id, timestamp DESC
+          ) ph
+          JOIN retailers r ON ph.retailer_id = r.id
+        ) as retailers
+      FROM products p
+      WHERE p.id = $1 AND p.is_active = true
+    `, [productId]);
+
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Product not found'
       });
     }
-    
+
+    const product = result.rows[0];
+
     res.json({
       success: true,
-      product
+      product: {
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        category: product.category,
+        size: product.size,
+        ean: product.ean,
+        imageUrl: product.image_url,
+        emoji: product.emoji,
+        retailers: product.retailers || [],
+        nextDiscount: product.next_discount,
+      }
     });
-  } catch (error) {
-    console.error('Error reading product:', error);
+  } catch (err) {
+    console.error('❌ Error fetching product:', err);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch product'
+      error: 'Failed to fetch product',
+      message: err.message
     });
   }
 });
 
-// Get cheapest price for a product
+// ────────────────────────────────────────────────────────────
+// Get cheapest retailer for a product
+// ────────────────────────────────────────────────────────────
 app.get('/api/products/:productId/cheapest', async (req, res) => {
+  const { productId } = req.params;
+
   try {
-    const { productId } = req.params;
-    const dataPath = path.join(__dirname, 'data', 'products.json');
-    const data = await fs.readFile(dataPath, 'utf-8');
-    const allData = JSON.parse(data);
-    
-    const product = allData.products[productId];
-    
-    if (!product || !product.retailers || product.retailers.length === 0) {
+    const result = await pool.query(`
+      SELECT 
+        r.id,
+        r.name,
+        r.logo,
+        r.url,
+        ph.price,
+        ph.old_price,
+        ph.is_discount,
+        ph.in_stock,
+        ph.shipping_cost,
+        ph.timestamp
+      FROM price_history ph
+      JOIN retailers r ON ph.retailer_id = r.id
+      WHERE ph.product_id = $1
+        AND ph.timestamp = (
+          SELECT MAX(timestamp) 
+          FROM price_history 
+          WHERE product_id = $1 AND retailer_id = ph.retailer_id
+        )
+      ORDER BY ph.price ASC
+      LIMIT 1
+    `, [productId]);
+
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Product not found or has no retailers'
+        error: 'No prices found for this product'
       });
     }
-    
-    const cheapest = product.retailers.reduce((min, retailer) => 
-      retailer.price < min.price ? retailer : min
-    );
-    
+
     res.json({
       success: true,
-      cheapest
+      cheapest: {
+        retailer: result.rows[0].name,
+        price: result.rows[0].price,
+        oldPrice: result.rows[0].old_price,
+        discount: result.rows[0].is_discount,
+        inStock: result.rows[0].in_stock,
+        shippingCost: result.rows[0].shipping_cost,
+        url: result.rows[0].url,
+        lastChecked: result.rows[0].timestamp
+      }
     });
-  } catch (error) {
-    console.error('Error finding cheapest:', error);
+  } catch (err) {
+    console.error('❌ Error finding cheapest:', err);
     res.status(500).json({
       success: false,
-      error: 'Failed to find cheapest price'
+      error: 'Failed to find cheapest retailer',
+      message: err.message
     });
   }
 });
 
-// Catch-all for undefined routes
-app.use('*', (req, res) => {
+// ────────────────────────────────────────────────────────────
+// Get price history for a product
+// ────────────────────────────────────────────────────────────
+app.get('/api/products/:productId/history', async (req, res) => {
+  const { productId } = req.params;
+  const { days = 30 } = req.query;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        DATE(timestamp) as date,
+        MIN(price) as lowest_price,
+        AVG(price) as avg_price,
+        r.name as retailer_name,
+        r.id as retailer_id
+      FROM price_history ph
+      JOIN retailers r ON ph.retailer_id = r.id
+      WHERE ph.product_id = $1
+        AND ph.timestamp >= NOW() - INTERVAL '${parseInt(days)} days'
+      GROUP BY DATE(timestamp), r.id, r.name
+      ORDER BY date DESC, lowest_price ASC
+    `, [productId]);
+
+    res.json({
+      success: true,
+      productId: productId,
+      days: parseInt(days),
+      history: result.rows
+    });
+  } catch (err) {
+    console.error('❌ Error fetching history:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch price history',
+      message: err.message
+    });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// Manual scraper trigger (runs in background)
+// ────────────────────────────────────────────────────────────
+app.post('/api/scrape', async (req, res) => {
+  console.log('🤖 Manual scrape triggered');
+
+  try {
+    const ScraperManager = require('./scrapers/scraper');
+    const manager = new ScraperManager();
+
+    // Run in background - don't await
+    manager.scrapeAllProducts()
+      .then(() => console.log('✅ Background scrape completed'))
+      .catch(err => console.error('❌ Background scrape failed:', err));
+
+    res.json({
+      success: true,
+      message: 'Scraping started in background',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Scrape trigger failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start scraper',
+      message: error.message
+    });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// Track analytics event
+// ────────────────────────────────────────────────────────────
+app.post('/api/track', async (req, res) => {
+  const { event, productId, retailerId, price, timestamp } = req.body;
+
+  console.log(`📊 Track event: ${event} - Product: ${productId}`);
+
+  try {
+    await pool.query(`
+      INSERT INTO analytics_events (event_type, product_id, retailer_id, price, timestamp)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [event, productId, retailerId, price, timestamp || new Date()]);
+
+    res.json({
+      success: true,
+      message: 'Event tracked'
+    });
+  } catch (err) {
+    console.error('❌ Error tracking event:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to track event',
+      message: err.message
+    });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// 404 Handler
+// ────────────────────────────────────────────────────────────
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     error: 'Endpoint not found',
@@ -113,14 +402,55 @@ app.use('*', (req, res) => {
       'GET /health',
       'GET /api/products',
       'GET /api/products/:productId',
-      'GET /api/products/:productId/cheapest'
+      'GET /api/products/:productId/cheapest',
+      'GET /api/products/:productId/history',
+      'POST /api/scrape',
+      'POST /api/track'
     ]
   });
 });
 
-// Start server
+// ────────────────────────────────────────────────────────────
+// Error Handler
+// ────────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('💥 Unhandled error:', err);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// START SERVER
+// ═══════════════════════════════════════════════════════════
+
 app.listen(PORT, () => {
-  console.log(`✓ Baby Price Tracker API running on port ${PORT}`);
-  console.log(`  Health: http://localhost:${PORT}/health`);
-  console.log(`  Products: http://localhost:${PORT}/api/products`);
+  console.log('');
+  console.log('🚀 ═══════════════════════════════════════════════');
+  console.log('🚀  Baby Price Tracker API Server');
+  console.log('🚀 ═══════════════════════════════════════════════');
+  console.log(`🚀  Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀  Running on: http://localhost:${PORT}`);
+  console.log(`🚀  Health check: http://localhost:${PORT}/health`);
+  console.log(`🚀  Products: http://localhost:${PORT}/api/products`);
+  console.log('🚀 ═══════════════════════════════════════════════');
+  console.log('');
+});
+
+// ═══════════════════════════════════════════════════════════
+// GRACEFUL SHUTDOWN
+// ═══════════════════════════════════════════════════════════
+
+process.on('SIGTERM', async () => {
+  console.log('👋 SIGTERM received, shutting down gracefully...');
+  await pool.end();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('👋 SIGINT received, shutting down gracefully...');
+  await pool.end();
+  process.exit(0);
 });
