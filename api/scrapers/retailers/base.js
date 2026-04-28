@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-// BASE SCRAPER CLASS
-// Alle retailers erven van deze class
+// ENHANCED BASE SCRAPER CLASS
+// Supports both EAN search AND name search with EAN extraction
 // ═══════════════════════════════════════════════════════════
 
 const axios = require('axios');
@@ -9,9 +9,9 @@ class BaseScraper {
   constructor(retailerName) {
     this.name = retailerName;
     this.userAgents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     ];
   }
 
@@ -35,8 +35,10 @@ class BaseScraper {
             'Accept-Language': 'nl-NL,nl;q=0.9,en;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
           },
-          timeout: 10000,
+          timeout: 15000,
+          maxRedirects: 5,
         });
         
         console.log(`[${this.name}] ✓ Success (${response.status})`);
@@ -48,7 +50,7 @@ class BaseScraper {
           throw error;
         }
         
-        await this.sleep(1000 * (i + 1));
+        await this.sleep(2000 * (i + 1));
       }
     }
   }
@@ -77,8 +79,13 @@ class BaseScraper {
     return !outOfStockPhrases.some(phrase => lowercaseHtml.includes(phrase));
   }
 
-  async scrape(productEan) {
-    throw new Error(`scrape() method must be implemented by ${this.name}`);
+  // Abstract methods - must be implemented by child classes
+  async scrapeByName(productName) {
+    throw new Error(`scrapeByName() must be implemented by ${this.name}`);
+  }
+
+  async scrapeByEAN(productEan) {
+    throw new Error(`scrapeByEAN() must be implemented by ${this.name}`);
   }
 }
 
