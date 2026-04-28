@@ -1,123 +1,71 @@
-{
-  "lastUpdated": "2026-04-28T08:28:36.932015",
-  "products": {
-    "pampers-newborn-74": {
-      "name": "Pampers Premium Protection Newborn",
-      "category": "Luiers",
-      "size": "74 stuks",
-      "icon": "👶",
-      "retailers": [
-        {
-          "id": 1,
-          "name": "Bol.com",
-          "price": 13.05,
-          "deliveryCost": 0,
-          "type": "online",
-          "rating": 4.6,
-          "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-04-28 08:28:15"
-        },
-        {
-          "id": 2,
-          "name": "Kruidvat",
-          "price": 11.93,
-          "deliveryCost": 2.99,
-          "type": "physical",
-          "rating": 4.5,
-          "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-04-28 08:28:18"
-        },
-        {
-          "id": 3,
-          "name": "Albert Heijn",
-          "price": 14.06,
-          "deliveryCost": 3.95,
-          "type": "both",
-          "rating": 4.3,
-          "stock": false,
-          "promo": "1+1 gratis",
-          "lastUpdated": "2026-04-28 08:28:21"
-        }
-      ]
-    },
-    "pampers-pants-s4-44": {
-      "name": "Pampers Baby-Dry Pants Maat 4",
-      "category": "Luiers",
-      "size": "44 stuks",
-      "icon": "🍼",
-      "retailers": [
-        {
-          "id": 1,
-          "name": "Bol.com",
-          "price": 19.45,
-          "deliveryCost": 0,
-          "type": "online",
-          "rating": 4.6,
-          "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-04-28 08:28:24"
-        },
-        {
-          "id": 2,
-          "name": "Kruidvat",
-          "price": 18.15,
-          "deliveryCost": 2.99,
-          "type": "physical",
-          "rating": 4.5,
-          "stock": true,
-          "promo": "Bulk deal",
-          "lastUpdated": "2026-04-28 08:28:27"
-        },
-        {
-          "id": 3,
-          "name": "Albert Heijn",
-          "price": 20.24,
-          "deliveryCost": 3.95,
-          "type": "both",
-          "rating": 4.3,
-          "stock": false,
-          "promo": "25% korting",
-          "lastUpdated": "2026-04-28 08:28:30"
-        }
-      ]
-    },
-    "kruidvat-wipes-168": {
-      "name": "Kruidvat Sensitive Billendoekjes",
-      "category": "Billendoekjes",
-      "size": "168 stuks",
-      "icon": "🧻",
-      "retailers": [
-        {
-          "id": 1,
-          "name": "Bol.com",
-          "price": 4.31,
-          "deliveryCost": 0,
-          "type": "online",
-          "rating": 4.6,
-          "stock": true,
-          "promo": "1+1 gratis",
-          "lastUpdated": "2026-04-28 08:28:33"
-        },
-        {
-          "id": 2,
-          "name": "Kruidvat",
-          "price": 2.48,
-          "deliveryCost": 2.99,
-          "type": "physical",
-          "rating": 4.5,
-          "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-04-28 08:28:36"
-        }
-      ]
-    }
-  },
-  "metadata": {
-    "totalProducts": 3,
-    "totalPrices": 8,
-    "scrapeDate": "2026-04-28",
-    "scrapeTime": "08:28:36"
+app.get('/api/products', async (req, res) => {
+  try {
+    console.log('📦 Products requested');
+
+    const query = `
+      SELECT 
+        p.id, p.name, p.brand, p.category, p.size, p.maat, p.emoji,
+        r.id as retailer_id, r.name as retailer_name, r.logo as retailer_logo,
+        ph.price, ph.old_price, ph.is_discount, ph.in_stock, 
+        ph.shipping_cost, ph.timestamp,
+        ph.total_price, ph.price_per_unit, ph.promo_quantity,
+        ph.promo_type, ph.original_price, ph.discount_amount
+      FROM products p
+      LEFT JOIN LATERAL (
+        SELECT DISTINCT ON (retailer_id) *
+        FROM price_history
+        WHERE product_id = p.id
+        ORDER BY retailer_id, timestamp DESC
+      ) ph ON true
+      LEFT JOIN retailers r ON ph.retailer_id = r.id
+      WHERE p.is_active = true
+      ORDER BY p.category, p.name, r.name
+    `;
+
+    const result = await pool.query(query);
+    
+    // Group by product
+    const products = {};
+    result.rows.forEach(row => {
+      if (!products[row.id]) {
+        products[row.id] = {
+          id: row.id,
+          name: row.name,
+          brand: row.brand,
+          category: row.category,
+          size: row.size,
+          maat: row.maat,  // NEW!
+          emoji: row.emoji,
+          retailers: []
+        };
+      }
+      
+      if (row.retailer_id) {
+        products[row.id].retailers.push({
+          name: row.retailer_name,
+          logo: row.retailer_logo,
+          price: parseFloat(row.price),
+          oldPrice: row.old_price ? parseFloat(row.old_price) : null,
+          discount: row.is_discount,
+          inStock: row.in_stock,
+          shippingCost: parseFloat(row.shipping_cost),
+          lastChecked: row.timestamp,
+          // NEW FIELDS:
+          totalPrice: row.total_price ? parseFloat(row.total_price) : null,
+          pricePerUnit: row.price_per_unit ? parseFloat(row.price_per_unit) : null,
+          promoQuantity: row.promo_quantity,
+          promoType: row.promo_type,
+          originalPrice: row.original_price ? parseFloat(row.original_price) : null,
+          discountAmount: row.discount_amount ? parseFloat(row.discount_amount) : null
+        });
+      }
+    });
+
+    console.log(`✅ Returned ${Object.keys(products).length} products`);
+    res.json({ products });
+
+  } catch (error) {
+    console.error('❌ Error fetching products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
   }
-}
+});
