@@ -16,7 +16,6 @@ class ScraperManager {
     this.scrapers = [
       new KruidvatScraper(),
       new BolScraper(),
-      // Voeg hier meer scrapers toe
     ];
   }
 
@@ -29,11 +28,9 @@ class ScraperManager {
 
     for (const scraper of this.scrapers) {
       try {
-        // Scrape de retailer
         const result = await scraper.scrape(product.ean);
         
         if (result && result.price) {
-          // Zoek retailer ID
           const retailerQuery = await this.pool.query(
             'SELECT id FROM retailers WHERE name = $1',
             [result.retailer]
@@ -42,7 +39,6 @@ class ScraperManager {
           if (retailerQuery.rows.length > 0) {
             const retailerId = retailerQuery.rows[0].id;
 
-            // Sla prijs op in database
             await this.pool.query(`
               INSERT INTO price_history 
               (product_id, retailer_id, price, old_price, is_discount, in_stock, shipping_cost, timestamp)
@@ -62,7 +58,6 @@ class ScraperManager {
           }
         }
 
-        // Rate limiting: wacht 2 seconden tussen retailers
         await scraper.sleep(2000);
 
       } catch (error) {
@@ -77,7 +72,6 @@ class ScraperManager {
     console.log('\n🤖 Starting scraper...\n');
 
     try {
-      // Haal alle actieve producten op
       const productsQuery = await this.pool.query(`
         SELECT id, name, ean 
         FROM products 
@@ -90,7 +84,6 @@ class ScraperManager {
       for (const product of products) {
         await this.scrapeProduct(product);
         
-        // Wacht 5 seconden tussen producten
         console.log('\n⏳ Waiting 5 seconds...\n');
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
