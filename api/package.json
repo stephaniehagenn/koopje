@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "scrape": "node test-scraper.js",
+    "cron": "node jobs/scrape-prices.js"
   },
   "keywords": [
     "baby",
