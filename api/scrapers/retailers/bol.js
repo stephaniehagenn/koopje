@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// BOL.COM SCRAPER
+// BOL.COM SCRAPER - WITH EAN EXTRACTION
 // ═══════════════════════════════════════════════════════════
 
 const cheerio = require('cheerio');
@@ -11,32 +11,79 @@ class BolScraper extends BaseScraper {
     this.baseUrl = 'https://www.bol.com';
   }
 
-  async scrape(productEan) {
+  async scrapeByName(productName) {
     try {
-      const searchUrl = `${this.baseUrl}/nl/nl/s/?searchtext=${productEan}`;
+      // Search by product name
+      const searchQuery = encodeURIComponent(productName);
+      const searchUrl = `${this.baseUrl}/nl/nl/s/?searchtext=${searchQuery}`;
       
       const response = await this.fetchWithRetry(searchUrl);
       const html = response.data;
       const $ = cheerio.load(html);
 
-      const productCard = $('a[data-test="product-item"]').first();
+      // Find first product result
+      const firstProduct = $('a[data-test="product-item"]').first();
       
-      if (!productCard.length) {
-        console.log(`[${this.name}] Product niet gevonden voor EAN: ${productEan}`);
+      if (!firstProduct.length) {
+        console.log(`[${this.name}] Product niet gevonden: ${productName}`);
         return null;
       }
 
-      const priceText = productCard.find('[data-test="price"]').text().trim();
+      // Get product page URL
+      const productLink = firstProduct.attr('href');
+      const productUrl = productLink?.startsWith('http') 
+        ? productLink 
+        : `${this.baseUrl}${productLink}`;
+
+      console.log(`[${this.name}] Product gevonden, ophalen details: ${productUrl}`);
+
+      // Fetch product page
+      await this.sleep(1000);
+      const productResponse = await this.fetchWithRetry(productUrl);
+      const productHtml = productResponse.data;
+      const $product = cheerio.load(productHtml);
+
+      // Extract EAN from product specifications
+      let ean = null;
+      
+      // Method 1: Look in specifications table
+      $product('[data-test="specifications"] dt').each((i, elem) => {
+        const label = $product(elem).text().trim().toLowerCase();
+        if (label.includes('ean') || label.includes('barcode')) {
+          ean = $product(elem).next('dd').text().trim();
+        }
+      });
+
+      // Method 2: Look in specs list (alternative structure)
+      $product('.specs__item').each((i, elem) => {
+        const label = $product(elem).find('.specs__label').text().trim().toLowerCase();
+        if (label.includes('ean')) {
+          ean = $product(elem).find('.specs__value').text().trim();
+        }
+      });
+
+      // Method 3: JSON-LD structured data
+      if (!ean) {
+        const scriptTags = $product('script[type="application/ld+json"]');
+        scriptTags.each((i, script) => {
+          try {
+            const data = JSON.parse($product(script).html());
+            if (data.gtin13) ean = data.gtin13;
+            if (data.gtin) ean = data.gtin;
+          } catch (e) {
+            // Ignore
+          }
+        });
+      }
+
+      console.log(`[${this.name}] EAN gevonden: ${ean || 'NIET GEVONDEN'}`);
+
+      // Extract price
+      const priceText = $product('[data-test="price"]').first().text().trim();
       const price = this.parsePrice(priceText);
 
-      const inStock = this.isInStock(html);
-
-      const productUrl = productCard.attr('href');
-      const fullUrl = productUrl?.startsWith('http') 
-        ? productUrl 
-        : `${this.baseUrl}${productUrl}`;
-
-      const shippingCost = 0;
+      // Check stock
+      const inStock = this.isInStock(productHtml);
 
       const result = {
         retailer: this.name,
@@ -44,9 +91,10 @@ class BolScraper extends BaseScraper {
         oldPrice: null,
         isDiscount: false,
         inStock: inStock,
-        url: fullUrl,
-        shippingCost: shippingCost,
+        url: productUrl,
+        shippingCost: 0, // Bol.com often has free shipping
         scrapedAt: new Date(),
+        ean: ean, // ⭐ NEW: Return scraped EAN!
       };
 
       console.log(`[${this.name}] ✓ Scraped:`, result);
@@ -56,6 +104,12 @@ class BolScraper extends BaseScraper {
       console.error(`[${this.name}] ✗ Scraping failed:`, error.message);
       return null;
     }
+  }
+
+  async scrapeByEAN(productEan) {
+    // Keep as fallback
+    console.log(`[${this.name}] EAN search not fully implemented, use name search`);
+    return null;
   }
 }
 
