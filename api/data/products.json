@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-12T10:16:59.840041",
+  "lastUpdated": "2026-06-13T09:19:23.198967",
   "products": {
     "pampers-newborn-74": {
       "name": "Pampers Premium Protection Newborn",
@@ -10,35 +10,35 @@
         {
           "id": 1,
           "name": "Bol.com",
-          "price": 13.59,
+          "price": 13.91,
           "deliveryCost": 0,
           "type": "online",
           "rating": 4.6,
           "stock": true,
           "promo": null,
-          "lastUpdated": "2026-06-12 10:16:38"
+          "lastUpdated": "2026-06-13 09:19:02"
         },
         {
           "id": 2,
           "name": "Kruidvat",
-          "price": 11.9,
+          "price": 12.14,
           "deliveryCost": 2.99,
           "type": "physical",
           "rating": 4.5,
           "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-06-12 10:16:41"
+          "promo": "2e halve prijs",
+          "lastUpdated": "2026-06-13 09:19:05"
         },
         {
           "id": 3,
           "name": "Albert Heijn",
-          "price": 14.41,
+          "price": 14.43,
           "deliveryCost": 3.95,
           "type": "both",
           "rating": 4.3,
           "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-06-12 10:16:44"
+          "promo": "2e halve prijs",
+          "lastUpdated": "2026-06-13 09:19:08"
         }
       ]
     },
@@ -51,35 +51,35 @@
         {
           "id": 1,
           "name": "Bol.com",
-          "price": 19.71,
+          "price": 19.57,
           "deliveryCost": 0,
           "type": "online",
           "rating": 4.6,
           "stock": false,
-          "promo": null,
-          "lastUpdated": "2026-06-12 10:16:47"
+          "promo": "1+1 gratis",
+          "lastUpdated": "2026-06-13 09:19:11"
         },
         {
           "id": 2,
           "name": "Kruidvat",
-          "price": 17.52,
+          "price": 17.84,
           "deliveryCost": 2.99,
           "type": "physical",
           "rating": 4.5,
           "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-06-12 10:16:50"
+          "promo": "1+1 gratis",
+          "lastUpdated": "2026-06-13 09:19:14"
         },
         {
           "id": 3,
           "name": "Albert Heijn",
-          "price": 20.44,
+          "price": 20.17,
           "deliveryCost": 3.95,
           "type": "both",
           "rating": 4.3,
-          "stock": true,
-          "promo": null,
-          "lastUpdated": "2026-06-12 10:16:53"
+          "stock": false,
+          "promo": "25% korting",
+          "lastUpdated": "2026-06-13 09:19:17"
         }
       ]
     },
@@ -92,24 +92,24 @@
         {
           "id": 1,
           "name": "Bol.com",
-          "price": 4.43,
+          "price": 4.28,
           "deliveryCost": 0,
           "type": "online",
           "rating": 4.6,
           "stock": true,
-          "promo": "1+1 gratis",
-          "lastUpdated": "2026-06-12 10:16:56"
+          "promo": null,
+          "lastUpdated": "2026-06-13 09:19:20"
         },
         {
           "id": 2,
           "name": "Kruidvat",
-          "price": 2.06,
+          "price": 2.03,
           "deliveryCost": 2.99,
           "type": "physical",
           "rating": 4.5,
-          "stock": false,
+          "stock": true,
           "promo": null,
-          "lastUpdated": "2026-06-12 10:16:59"
+          "lastUpdated": "2026-06-13 09:19:23"
         }
       ]
     }
@@ -117,7 +117,7 @@
   "metadata": {
     "totalProducts": 3,
     "totalPrices": 8,
-    "scrapeDate": "2026-06-12",
-    "scrapeTime": "10:16:59"
+    "scrapeDate": "2026-06-13",
+    "scrapeTime": "09:19:23"
   }
 }
